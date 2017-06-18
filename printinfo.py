@@ -327,7 +327,7 @@ def readFile(f):
                     print("Loop Context Second Previous Sample: " + hex(loopContext.preSample2))
                     pos += loopContext.size
                     pos += 2
-                elif 0x0301:
+                elif ADPCMInfo_ref[i].type_ == 0x0301:
                     context = IMAContext(bom)
                     context.data(f, pos)
                     print("Context Data: " + hex(context.data_))
