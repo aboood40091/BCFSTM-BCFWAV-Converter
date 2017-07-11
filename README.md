@@ -15,4 +15,6 @@ A tool to convert between the BFSTM, BCSTM, BFSTP, BFWAV, and BCWAV formats.
 <li>FSTM</li>
 <li>CSTM</li>
 <li>FSTP</li>
+<li>FWAV</li>
+<li>CWAV</li>
 </ul>
