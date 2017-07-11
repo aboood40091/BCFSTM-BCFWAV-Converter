@@ -6,8 +6,8 @@ A tool to convert between the BFSTM, BCSTM, BFSTP, BFWAV, and BCWAV formats.
   
 ### Options:
 <ul>
-<li><code>-format <dstFmt></code>  destination format</li>
-<li><code>-bom <bom></code>        endiannes (Optional)</li>
+<li><code>-format [dstFmt]</code>  destination format</li>
+<li><code>-bom [bom]</code>        endiannes (Optional)</li>
 </ul>
   
 ### Supported dest formats:
