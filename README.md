@@ -18,3 +18,9 @@ A tool to convert between the BFSTM, BCSTM, BFSTP, BFWAV, and BCWAV formats.
 <li>FWAV</li>
 <li>CWAV</li>
 </ul>
+  
+### bom:
+<ul>
+<li>0 - Big Endain (Wii U)</li>
+<li>1 - Little Endian (3DS/Switch)</li>
+</ul>

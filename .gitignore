@@ -98,3 +98,12 @@ ENV/
 
 # mypy
 .mypy_cache/
+
+# Other files
+*.bak
+*.bat
+*.bcstm
+*.bcwav
+*.bfstm
+*.bstp
+*.bfwav
