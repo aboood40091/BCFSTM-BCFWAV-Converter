@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # BCFSTM-BCFWAV Converter
-# Version v2.0
+# Version v2.1
 # Copyright © 2017-2018 AboodXD
 
 # This file is part of BCFSTM-BCFWAV Converter.
@@ -126,6 +126,8 @@ def readFile(f):
 
         if channelInfoTable[i].offset not in [0, -1]:
             pos = channelInfoTable[i].offset + countPos
+            print("\nChannel " + str(i) + " Info Entry offset: " + hex(pos))
+
             sampleData_ref = Ref(bom)
             sampleData_ref.data(f, pos)
 
@@ -133,7 +135,7 @@ def readFile(f):
                 for z in range(1, header.numBlocks + 1):
                     if sized_refs[z].offset not in [0, -1]:
                         if sized_refs[z].type_ == 0x7001:
-                            print("\nChannel " + str(i) + " Info Entry Sample Data offset: " + hex(sampleData_ref.offset + sized_refs[z].offset))
+                            print("\nChannel " + str(i) + " Info Entry Sample Data offset: " + hex(sampleData_ref.offset + sized_refs[z].offset + 8))
 
             pos += 8
 
@@ -143,10 +145,10 @@ def readFile(f):
             ADPCMInfo_ref[i].data(f, pos)
 
             if ADPCMInfo_ref[i].offset not in [0, -1]:
-                print("\nADPCM Info offset: " + hex(ADPCMInfo_ref[i].offset + pos))
+                print("\nADPCM Info offset: " + hex(ADPCMInfo_ref[i].offset + pos - 8))
                 print("Type: " + hex(ADPCMInfo_ref[i].type_))
 
-                pos = ADPCMInfo_ref[i].offset + pos
+                pos = ADPCMInfo_ref[i].offset + pos - 8
                 if ADPCMInfo_ref[i].type_ == 0x0300:
                     param = b''
                     for i in range(1, 17):

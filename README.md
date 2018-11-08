@@ -1,5 +1,6 @@
 # BCFSTM-BCFWAV-Converter
 A tool to convert between the BFSTM, BCSTM, BFSTP, BFWAV, and BCWAV formats.  
+Special thanks to Gota7 for explanation of sample data structure in WAV.  
   
 ## Usage:
 <code>main [option...] input</code>  

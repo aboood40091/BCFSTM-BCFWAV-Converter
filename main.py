@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # BCFSTM-BCFWAV Converter
-# Version v2.0
+# Version v2.1
 # Copyright © 2017-2018 AboodXD
 
 # This file is part of BCFSTM-BCFWAV Converter.
@@ -32,6 +32,10 @@ supp_STM = ["FSTM", "CSTM", "FSTP"]
 supp_WAV = ["FWAV", "CWAV"]
 
 
+def align(x, y):
+    return ((x - 1) | (y - 1)) + 1
+
+
 def convFile(f, dest, dest_bom):
     magic = bytes_to_string(f[:4])
     if magic in supp_STM and dest in supp_STM:
@@ -41,10 +45,7 @@ def convFile(f, dest, dest_bom):
         outputBuffer = WAVtoWAV(f, magic, dest, dest_bom)
 
     elif magic in supp_STM and dest in supp_WAV:
-        print("\nBFSTM/BCSTM/BFSTP to BFWAV/BCWAV is not implemented!")
-        print("\nExiting in 5 seconds...")
-        time.sleep(5)
-        sys.exit(1)
+        outputBuffer = STMtoWAV(f, magic, dest, dest_bom)
 
     elif magic in supp_WAV and dest in supp_STM:
         print("\nBFWAV/BCWAV to BFSTM/BCSTM/BFSTP is not implemented!")
@@ -440,7 +441,7 @@ def WAVtoWAV(f, magic, dest, dest_bom):
                 Ref(dest_bom).pack(ADPCMInfo_ref[i].type_, ADPCMInfo_ref[i].offset))
 
             if ADPCMInfo_ref[i].offset not in [0, -1]:
-                pos = ADPCMInfo_ref[i].offset - 8 * i + pos
+                pos = ADPCMInfo_ref[i].offset + pos - 8
                 if ADPCMInfo_ref[i].type_ == 0x0300:
                     for i in range(16):
                         i += 1
@@ -495,6 +496,267 @@ def WAVtoWAV(f, magic, dest, dest_bom):
     return outputBuffer
 
 
+def STMtoWAV(f, magic, dest, dest_bom):
+    outputBuffer = bytearray(len(f))
+
+    if f[4:6] == b'\xFF\xFE':
+        bom = '<'
+
+    elif f[4:6] == b'\xFE\xFF':
+        bom = '>'
+
+    else:
+        print("\nInvalid BOM!")
+        print("\nExiting in 5 seconds...")
+        time.sleep(5)
+        sys.exit(1)
+
+    if not dest_bom:
+        if dest == "FWAV":
+            dest_bom = '>'
+
+        else:
+            dest_bom = '<'
+
+    header = Header(bom)
+    header.data(f, 0)
+
+    pos = header.size
+    sized_refs = {}
+
+    for i in range(1, header.numBlocks + 1):
+        sized_refs[i] = Ref(bom)
+        sized_refs[i].data(f, pos + 12 * (i - 1))
+
+    if sized_refs[1].type_ != 0x4000 or sized_refs[1].offset in [0, -1]:
+        print("\nSomething went wrong!\nError code: 1")
+        print("\nExiting in 5 seconds...")
+        time.sleep(5)
+        sys.exit(1)
+
+    pos = sized_refs[1].offset
+
+    info = BLKHeader(bom)
+    info.data(f, pos)
+    pos += 8
+
+    stmInfo_ref = Ref(bom)
+    stmInfo_ref.data(f, pos)
+
+    if stmInfo_ref.type_ != 0x4100 or stmInfo_ref.offset in [0, -1]:
+        print("\nSomething went wrong!\nError code: 2")
+        print("\nExiting in 5 seconds...")
+        time.sleep(5)
+        sys.exit(1)
+
+    stmInfo_ref.pos = pos
+    pos += stmInfo_ref.size * 2
+
+    channelInfoTable_ref = Ref(bom)
+    channelInfoTable_ref.data(f, pos)
+
+    if channelInfoTable_ref.type_ != 0x0101:
+        print("\nSomething went wrong!\nError code: 4")
+        print("\nExiting in 5 seconds...")
+        time.sleep(5)
+        sys.exit(1)
+
+    pos = stmInfo_ref.offset + stmInfo_ref.pos
+    stmInfo = STMInfo(bom)
+    stmInfo.data(f, pos)
+
+    if stmInfo.codec not in [2, 3]:
+        print("\nCannot convert to WAV for this encoding: %d" % stmInfo.codec)
+        print("\nExiting in 5 seconds...")
+        time.sleep(5)
+        sys.exit(1)
+
+    sampleBlk_size = (stmInfo.sampleBlk_count - 1) * stmInfo.sampleBlk_size + stmInfo.lSampleBlk_size
+
+    wavInfo = WAVInfo(bom)
+    wavInfo.codec = stmInfo.codec
+    wavInfo.loop_flag = stmInfo.loop_flag
+    wavInfo.sample = stmInfo.sample
+    wavInfo.loop_start = stmInfo.loop_start
+    wavInfo.loop_end = stmInfo.loop_end
+    wavInfo.reserved = 0
+
+    otherPos = 0x48 + wavInfo.size
+
+    outputBuffer[0x48:otherPos] = bytes(
+        WAVInfo(dest_bom).pack(wavInfo.codec, wavInfo.loop_flag, wavInfo.sample,
+                               wavInfo.loop_start, wavInfo.loop_end, wavInfo.reserved))
+    channelInfoTable = {}
+    sampleData_ref = {}
+    ADPCMInfo_ref = {}
+    param = {}
+
+    pos = channelInfoTable_ref.offset + stmInfo_ref.pos
+    countPos = pos
+    otherCountPos = otherPos
+
+    count = struct.unpack(bom + "I", f[pos:pos + 4])[0]
+    outputBuffer[otherPos:otherPos + 4] = to_bytes(count, 4, dest_bom)
+
+    otherFstChInfPos = otherCountPos + 4 + count * 8
+    otherADPCMInfPos = otherFstChInfPos + count * 0x14
+
+    for i in range(1, count + 1):
+        pos = countPos + 4
+        otherPos = otherCountPos + 4
+
+        channelInfoTable[i] = Ref(bom)
+        channelInfoTable[i].data(f, pos + 8 * (i - 1))
+
+        if channelInfoTable[i].offset in [0, -1]:
+            outputBuffer[otherPos + 8 * (i - 1):otherPos + 8 * (i - 1) + channelInfoTable[i].size] = bytes(
+                Ref(dest_bom).pack(0x7100, channelInfoTable[i].offset))
+
+        else:
+            outputBuffer[otherPos + 8 * (i - 1):otherPos + 8 * (i - 1) + channelInfoTable[i].size] = bytes(
+                Ref(dest_bom).pack(0x7100, otherFstChInfPos + 0x14 * (i - 1) - otherCountPos))
+
+            pos = channelInfoTable[i].offset + countPos
+            otherPos = otherFstChInfPos + 0x14 * (i - 1)
+
+            sampleData_ref[i] = Ref(bom)
+
+            currsampleBlkSize = sampleBlk_size * (i - 1)
+            outputBuffer[otherPos:otherPos + sampleData_ref[i].size] = bytes(
+                Ref(dest_bom).pack(0x1F00, 0x18 + align(currsampleBlkSize, 0x20)))
+
+            ADPCMInfo_ref[i] = Ref(bom)
+            ADPCMInfo_ref[i].data(f, pos)
+
+            if ADPCMInfo_ref[i].offset in [0, -1]:
+                outputBuffer[otherPos + 8:otherPos + 8 + ADPCMInfo_ref[i].size] = bytes(
+                    Ref(dest_bom).pack(ADPCMInfo_ref[i].type_, ADPCMInfo_ref[i].offset))
+
+            else:
+                pos = ADPCMInfo_ref[i].offset + pos
+                if ADPCMInfo_ref[i].type_ == 0x0300:
+                    outputBuffer[otherPos + 8:otherPos + 8 + ADPCMInfo_ref[i].size] = bytes(
+                        Ref(dest_bom).pack(ADPCMInfo_ref[i].type_, otherADPCMInfPos + 0x2E * (i - 1) - otherPos))
+
+                    otherPos = otherADPCMInfPos + 0x2E * (i - 1)
+
+                    for i in range(16):
+                        i += 1
+                        param[i] = struct.unpack(bom + "H", f[pos + 2 * (i - 1):pos + 2 * (i - 1) + 2])[0]
+                        outputBuffer[otherPos + 2 * (i - 1):otherPos + 2 * (i - 1) + 2] = to_bytes(param[i], 2, dest_bom)
+
+                    pos += 32; otherPos += 32
+                    context = DSPContext(bom)
+                    context.data(f, pos)
+
+                    outputBuffer[otherPos:otherPos + context.size] = bytes(
+                        DSPContext(dest_bom).pack(context.predictor_scale, context.preSample, context.preSample2))
+
+                    pos += context.size; otherPos += context.size
+                    loopContext = DSPContext(bom)
+                    loopContext.data(f, pos)
+
+                    outputBuffer[otherPos:otherPos + loopContext.size] = bytes(
+                        DSPContext(dest_bom).pack(loopContext.predictor_scale, loopContext.preSample,
+                                                  loopContext.preSample2))
+
+                    pos += loopContext.size; otherPos += loopContext.size
+                    pos += 2; otherPos += 2
+
+                elif ADPCMInfo_ref[i].type_ == 0x0301:
+                    outputBuffer[otherPos + 8:otherPos + 8 + ADPCMInfo_ref[i].size] = bytes(
+                        Ref(dest_bom).pack(ADPCMInfo_ref[i].type_, otherADPCMInfPos + 8 * (i - 1) - otherPos))
+
+                    otherPos = otherADPCMInfPos + 8 * (i - 1)
+
+                    context = IMAContext(bom)
+                    context.data(f, pos)
+
+                    outputBuffer[otherPos:otherPos + context.size] = bytes(
+                        IMAContext(dest_bom).pack(context.data_, context.tableIndex))
+
+                    pos += context.size; otherPos += context.size
+                    loopContext = IMAContext(bom)
+                    loopContext.data(f, pos)
+
+                    outputBuffer[otherPos:otherPos + loopContext.size] = bytes(
+                        IMAContext(dest_bom).pack(loopContext.data_, loopContext.tableIndex))
+
+                    pos += loopContext.size; otherPos += loopContext.size
+
+                else:
+                    otherPos += 0x14
+
+    dataBlkOffset = align(otherPos, 0x20)
+    infoBlkSize = dataBlkOffset - 0x40
+
+    otherDataBlkOffset = 0
+    dataSize = 0
+
+    for i in range(1, header.numBlocks + 1):
+        if sized_refs[i].offset not in [0, -1]:
+            if sized_refs[i].type_ in [0x4002, 0x4004]:
+                otherDataBlkOffset = sized_refs[i].offset
+                dataBlkHead = BLKHeader(bom)
+                dataBlkHead.data(f, otherDataBlkOffset)
+                dataSize = dataBlkHead.size_
+    
+    pos = header.size
+    numBlocks = 0
+
+    for i in sized_refs:
+        if sized_refs[i].type_ not in [0x4000, 0x4002]:
+            continue
+
+        elif sized_refs[i].type_ == 0x4000:
+            numBlocks += 1
+            outputBuffer[pos:pos + 8] = bytes(Ref(dest_bom).pack(0x7000, 0x40))
+            outputBuffer[pos + 8:pos + 12] = struct.pack(dest_bom + "I", infoBlkSize)
+            outputBuffer[0x40:0x48] = bytes(BLKHeader(dest_bom).pack(b'INFO', infoBlkSize))
+
+        else:
+            if 0 not in [otherDataBlkOffset, dataSize] and otherDataBlkOffset != -1:
+                data = f[otherDataBlkOffset + 0x20:otherDataBlkOffset + dataSize]; pos = 0
+
+                if stmInfo.codec in [2, 3]:
+                    blocks = []
+                    for i in range((stmInfo.sampleBlk_count - 1) * count):
+                        blocks.append(data[pos:pos + stmInfo.sampleBlk_size])
+                        pos += stmInfo.sampleBlk_size
+
+                    for i in range(count):
+                        blocks.append(data[pos:pos + stmInfo.lSampleBlk_size])
+                        pos += stmInfo.lSampleBlk_padSize
+
+                    sampleData = [[blocks[i * count + j] for i in range(stmInfo.sampleBlk_count)] for j in range(count)]
+                    samples = []
+
+                    for channel in sampleData:
+                        channelSampleData = b''.join(channel)
+                        padding = b'\0' * (align(len(channelSampleData), 0x20) - len(channelSampleData))
+                        samples.append(b''.join([channelSampleData, padding]))
+
+                    data = b''.join(samples)
+
+            pos = header.size
+
+            numBlocks += 1
+            outputBuffer[pos + 12:pos + 20] = bytes(Ref(dest_bom).pack(0x7001, dataBlkOffset))
+            outputBuffer[dataBlkOffset + 0x20:] = data
+            outputBuffer[dataBlkOffset:dataBlkOffset + 8] = bytes(BLKHeader(dest_bom).pack(b'DATA', len(outputBuffer) - dataBlkOffset))
+            outputBuffer[pos + 20:pos + 24] = struct.pack(dest_bom + "I", len(outputBuffer) - dataBlkOffset)
+
+    dest_ver = {"FWAV": 0x10100, "CWAV": 0x2010000}
+
+    outputBuffer[:header.size] = bytes(
+        Header(dest_bom).pack(to_bytes(dest, 4), 0x40, dest_ver[dest], len(outputBuffer), numBlocks,
+                              header.reserved))
+
+    outputBuffer[4:6] = (b'\xFE\xFF' if dest_bom == '>' else b'\xFF\xFE')
+
+    return outputBuffer
+
+
 def printInfo():
     print("\nUsage:")
     print("  main [option...] input")
@@ -516,7 +778,7 @@ def printInfo():
 
 
 def main():
-    print("BCFSTM-BCFWAV Converter v2.0")
+    print("BCFSTM-BCFWAV Converter v2.1")
     print("(C) 2017-2018 AboodXD")
 
     if len(sys.argv) not in [4, 6]:

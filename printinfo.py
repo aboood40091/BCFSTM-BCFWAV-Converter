@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # BCFSTM-BCFWAV Converter
-# Version v2.0
+# Version v2.1
 # Copyright © 2017-2018 AboodXD
 
 # This file is part of BCFSTM-BCFWAV Converter.
