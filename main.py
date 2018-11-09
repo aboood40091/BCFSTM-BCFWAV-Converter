@@ -313,7 +313,16 @@ def STMtoSTM(f, magic, dest, dest_bom):
                 outputBuffer[pos:pos + seek.size] = bytes(BLKHeader(dest_bom).pack(seek.magic, seek.size_))
                 pos += seek.size
                 seek.data_ = f[pos:pos + seek.size_ - 8]
-                outputBuffer[pos:pos + seek.size_ - 8] = seek.data_
+
+                if bom == dest_bom:
+                    outputBuffer[pos:pos + seek.size_ - 8] = seek.data_
+
+                else:
+                    for i in range(0, len(seek.data_), 2):
+                        outputBuffer[pos + i:pos + i + 2] = to_bytes(
+                            struct.unpack(bom + "H", seek.data_[i:i + 2])[0],
+                            2, dest_bom,
+                        )
 
             elif sized_refs[i].type_ in [0x4002, 0x4004]:
                 pos = sized_refs[i].offset
