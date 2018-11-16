@@ -107,3 +107,4 @@ ENV/
 *.bfstm
 *.bstp
 *.bfwav
+*.wav

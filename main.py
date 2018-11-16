@@ -88,7 +88,9 @@ def STMtoSTM(f, magic, dest, dest_bom):
     header = Header(bom)
     header.data(f, pos)
 
-    dest_ver = {"FSTM": 0x40000, "CSTM": 0x2000000, "FSTP": 0x20100}
+    curr = magic
+
+    dest_ver = {"FSTM": 0x40000, "CSTM": 0x2020000, "FSTP": 0x20100}
     if magic == dest:
         dest_ver[dest] = header.version
 
@@ -175,12 +177,6 @@ def STMtoSTM(f, magic, dest, dest_bom):
     pos = stmInfo_ref.offset + stmInfo_ref.pos
     stmInfo = STMInfo(bom)
     stmInfo.data(f, pos)
-
-    if bom != dest_bom and stmInfo.codec not in [2, 3]:
-        print("\nCannot do endianness swapping for this encoding: %d" % stmInfo.codec)
-        print("\nExiting in 5 seconds...")
-        time.sleep(5)
-        sys.exit(1)
 
     outputBuffer[pos:pos + stmInfo.size] = bytes(
         STMInfo(dest_bom).pack(stmInfo.codec, stmInfo.loop_flag, stmInfo.count, stmInfo.sample, stmInfo.loop_start,
@@ -314,14 +310,14 @@ def STMtoSTM(f, magic, dest, dest_bom):
                 pos += seek.size
                 seek.data_ = f[pos:pos + seek.size_ - 8]
 
-                if bom == dest_bom:
+                if curr[:-1] == dest[:-1]:
                     outputBuffer[pos:pos + seek.size_ - 8] = seek.data_
 
                 else:
                     for i in range(0, len(seek.data_), 2):
                         outputBuffer[pos + i:pos + i + 2] = to_bytes(
-                            struct.unpack(bom + "H", seek.data_[i:i + 2])[0],
-                            2, dest_bom,
+                            struct.unpack(">H", seek.data_[i:i + 2])[0],
+                            2, "<",
                         )
 
             elif sized_refs[i].type_ in [0x4002, 0x4004]:
@@ -331,7 +327,16 @@ def STMtoSTM(f, magic, dest, dest_bom):
                 outputBuffer[pos:pos + data.size] = bytes(BLKHeader(dest_bom).pack(dest_dataHead[dest], data.size_))
                 pos += data.size
                 data.data_ = f[pos:pos + data.size_ - 8]
-                outputBuffer[pos:pos + data.size_ - 8] = data.data_
+
+                if bom != dest_bom and stmInfo.codec == 1:
+                    for i in range(0, len(data.data_), 2):
+                        outputBuffer[pos + i:pos + i + 2] = to_bytes(
+                            struct.unpack(">H", data.data_[i:i + 2])[0],
+                            2, "<",
+                        )
+
+                else:
+                    outputBuffer[pos:pos + data.size_ - 8] = data.data_
 
     return outputBuffer
 
@@ -574,12 +579,6 @@ def STMtoWAV(f, magic, dest, dest_bom):
     stmInfo = STMInfo(bom)
     stmInfo.data(f, pos)
 
-    if stmInfo.codec not in [2, 3]:
-        print("\nCannot convert to WAV for this encoding: %d" % stmInfo.codec)
-        print("\nExiting in 5 seconds...")
-        time.sleep(5)
-        sys.exit(1)
-
     sampleBlk_size = (stmInfo.sampleBlk_count - 1) * stmInfo.sampleBlk_size + stmInfo.lSampleBlk_size
 
     wavInfo = WAVInfo(bom)
@@ -727,25 +726,34 @@ def STMtoWAV(f, magic, dest, dest_bom):
             if 0 not in [otherDataBlkOffset, dataSize] and otherDataBlkOffset != -1:
                 data = f[otherDataBlkOffset + 0x20:otherDataBlkOffset + dataSize]; pos = 0
 
-                if stmInfo.codec in [2, 3]:
-                    blocks = []
-                    for i in range((stmInfo.sampleBlk_count - 1) * count):
-                        blocks.append(data[pos:pos + stmInfo.sampleBlk_size])
-                        pos += stmInfo.sampleBlk_size
+                blocks = []
+                for i in range((stmInfo.sampleBlk_count - 1) * count):
+                    blocks.append(data[pos:pos + stmInfo.sampleBlk_size])
+                    pos += stmInfo.sampleBlk_size
 
-                    for i in range(count):
-                        blocks.append(data[pos:pos + stmInfo.lSampleBlk_size])
-                        pos += stmInfo.lSampleBlk_padSize
+                for i in range(count):
+                    blocks.append(data[pos:pos + stmInfo.lSampleBlk_size])
+                    pos += stmInfo.lSampleBlk_padSize
 
-                    sampleData = [[blocks[i * count + j] for i in range(stmInfo.sampleBlk_count)] for j in range(count)]
-                    samples = []
+                sampleData = [[blocks[i * count + j] for i in range(stmInfo.sampleBlk_count)] for j in range(count)]
+                samples = []
 
-                    for channel in sampleData:
-                        channelSampleData = b''.join(channel)
-                        padding = b'\0' * (align(len(channelSampleData), 0x20) - len(channelSampleData))
-                        samples.append(b''.join([channelSampleData, padding]))
+                for channel in sampleData:
+                    channelSampleData = b''.join(channel)
+                    padding = b'\0' * (align(len(channelSampleData), 0x20) - len(channelSampleData))
+                    samples.append(b''.join([channelSampleData, padding]))
 
-                    data = b''.join(samples)
+                data = b''.join(samples)
+
+                if bom != dest_bom and stmInfo.codec == 1:
+                    data_ = bytearray(data)
+                    for i in range(0, len(data), 2):
+                        data_[i:i + 2] = to_bytes(
+                            struct.unpack(">H", data[i:i + 2])[0],
+                            2, "<",
+                        )
+
+                    data = bytes(data_); del data_
 
             pos = header.size
 
