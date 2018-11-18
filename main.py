@@ -315,10 +315,9 @@ def STMtoSTM(f, magic, dest, dest_bom):
 
                 else:
                     for i in range(0, len(seek.data_), 2):
-                        outputBuffer[pos + i:pos + i + 2] = to_bytes(
-                            struct.unpack(">H", seek.data_[i:i + 2])[0],
-                            2, "<",
-                        )
+                        outputBuffer[pos + i:pos + i + 2] = bytes([
+                            seek.data_[i+1], seek.data_[i],
+                        ])
 
             elif sized_refs[i].type_ in [0x4002, 0x4004]:
                 pos = sized_refs[i].offset
@@ -330,10 +329,9 @@ def STMtoSTM(f, magic, dest, dest_bom):
 
                 if bom != dest_bom and stmInfo.codec == 1:
                     for i in range(0, len(data.data_), 2):
-                        outputBuffer[pos + i:pos + i + 2] = to_bytes(
-                            struct.unpack(">H", data.data_[i:i + 2])[0],
-                            2, "<",
-                        )
+                        outputBuffer[pos + i:pos + i + 2] = bytes([
+                            data.data_[i+1], data.data_[i],
+                        ])
 
                 else:
                     outputBuffer[pos:pos + data.size_ - 8] = data.data_
@@ -409,12 +407,6 @@ def WAVtoWAV(f, magic, dest, dest_bom):
 
     wavInfo = WAVInfo(bom)
     wavInfo.data(f, pos)
-
-    if bom != dest_bom and wavInfo.codec not in [2, 3]:
-        print("\nCannot do endianness swapping for this encoding: %d" % wavInfo.codec)
-        print("\nExiting in 5 seconds...")
-        time.sleep(5)
-        sys.exit(1)
 
     outputBuffer[pos:pos + wavInfo.size] = bytes(
         WAVInfo(dest_bom).pack(wavInfo.codec, wavInfo.loop_flag, wavInfo.sample,
@@ -505,7 +497,15 @@ def WAVtoWAV(f, magic, dest, dest_bom):
                 outputBuffer[pos:pos + data.size] = bytes(BLKHeader(dest_bom).pack(data.magic, data.size_))
                 pos += data.size
                 data.data_ = f[pos:pos + data.size_ - 8]
-                outputBuffer[pos:pos + data.size_ - 8] = data.data_
+
+                if bom != dest_bom and wavInfo.codec == 1:
+                    for i in range(0, len(data.data_), 2):
+                        outputBuffer[pos + i:pos + i + 2] = bytes([
+                            data.data_[i+1], data.data_[i],
+                        ])
+
+                else:
+                    outputBuffer[pos:pos + data.size_ - 8] = data.data_
 
     return outputBuffer
 
@@ -748,10 +748,9 @@ def STMtoWAV(f, magic, dest, dest_bom):
                 if bom != dest_bom and stmInfo.codec == 1:
                     data_ = bytearray(data)
                     for i in range(0, len(data), 2):
-                        data_[i:i + 2] = to_bytes(
-                            struct.unpack(">H", data[i:i + 2])[0],
-                            2, "<",
-                        )
+                        data_[i:i + 2] = bytes([
+                            data[i+1], data[i],
+                        ])
 
                     data = bytes(data_); del data_
 
