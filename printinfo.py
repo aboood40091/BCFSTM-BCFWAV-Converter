@@ -73,8 +73,11 @@ def readFile(f):
             elif sized_refs[i].type_ == 0x4001:
                 print("\nSeek Block offset: " + hex(sized_refs[i].offset))
 
-            elif sized_refs[i].type_ in [0x4002, 0x4004]:
+            elif sized_refs[i].type_ == 0x4002:
                 print("\nData Block offset: " + hex(sized_refs[i].offset))
+
+            elif sized_refs[i].type_ == 0x4004:
+                print("\nPrefetch Data Block offset: " + hex(sized_refs[i].offset))
 
             else:
                 print("\n" + hex(sized_refs[i].type_) + " Block offset: " + hex(sized_refs[i].offset))
@@ -173,8 +176,10 @@ def readFile(f):
     if sampleData_ref.offset not in [0, -1]:
         for i in range(1, header.numBlocks + 1):
             if sized_refs[i].offset not in [0, -1]:
-                if sized_refs[i].type_ in [0x4002, 0x4004]:
-                    print("Sample Data offset: " + hex(sampleData_ref.offset + sized_refs[i].offset))
+                if sized_refs[i].type_  == 0x4002:
+                    print("Sample Data offset: " + hex(sampleData_ref.offset + sized_refs[i].offset + 8))
+                if sized_refs[i].type_  == 0x4004:
+                    print("Prefetch Data offset: " + hex(sampleData_ref.offset))
 
     pos += 8
 
@@ -303,7 +308,8 @@ def readFile(f):
                 data.data(f, pos)
 
                 print('')
-                print("Data Block Magic: " + bytes_to_string(data.magic))
+                if sized_refs[i].type_ == 0x4002: print("Data Block Magic: " + bytes_to_string(data.magic))
+                else:  print("Prefetch Data Block Magic: " + bytes_to_string(data.magic))
                 print("Size: " + hex(data.size_))
 
                 pos += data.size
