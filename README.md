@@ -1,27 +1,21 @@
 # BCFSTM-BCFWAV-Converter
-A tool to convert between the BFSTM, BCSTM, BFSTP, BFWAV, and BCWAV formats.  
-Special thanks to Gota7 for explanation of sample data structure in WAV.  
-  
+A tool to convert between the BFSTM, BCSTM, BFSTP, BFWAV, and BCWAV formats.
+Special thanks to Gota7 for explanation of sample data structure in WAV.
+
 ## Usage:
-<code>main [option...] input</code>  
-  
+`main [option...] input`
+
 ### Options:
-<ul>
-<li><code>-format [dstFmt]</code>  destination format</li>
-<li><code>-bom [bom]</code>        endiannes (Optional)</li>
-</ul>
-  
+- `-format [dstFmt]` destination format
+- `-bom [bom]` endianness (Optional)
+
 ### Supported dest formats:
-<ul>
-<li>FSTM</li>
-<li>CSTM</li>
-<li>FSTP</li>
-<li>FWAV</li>
-<li>CWAV</li>
-</ul>
-  
+- FSTM
+- CSTM
+- FSTP
+- FWAV
+- CWAV
+
 ### bom:
-<ul>
-<li>0 - Big Endain (Wii U)</li>
-<li>1 - Little Endian (3DS/Switch)</li>
-</ul>
+- 0 - Big Endian (Wii U)
+- 1 - Little Endian (3DS/Switch)
